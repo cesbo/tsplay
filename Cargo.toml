@@ -1,0 +1,7 @@
+[package]
+name = "tsplay"
+version = "0.1.0"
+authors = ["Cesbo Developers Team"]
+edition = "2018"
+
+[dependencies]
