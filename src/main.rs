@@ -1,7 +1,12 @@
-use {
-    std::path::Path,
+mod config;
 
-    clap,
+use {
+    std::{
+        fs::File,
+        path::Path,
+    },
+
+    config::Config,
 };
 
 
@@ -34,5 +39,10 @@ fn main() {
             .help("config file")
         ).get_matches();
 
-    dbg!(args);
+    dbg!(&args);
+
+    let file = File::open(args.value_of_os("config").unwrap()).unwrap();
+    let config: Config = serde_json::from_reader(&file).unwrap();
+
+    dbg!(&config);
 }
