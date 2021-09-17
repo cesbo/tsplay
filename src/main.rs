@@ -1,10 +1,7 @@
 mod config;
 
 use {
-    std::{
-        fs,
-        path::Path,
-    },
+    std::fs,
 
     anyhow::{
         Result,
@@ -16,15 +13,6 @@ use {
 
 
 const DEFAULT_CONFIG_FILE: &str = "/etc/tsplay.conf";
-
-
-fn path_validator(path: String) -> Result<(), String> {
-    let file = Path::new(&path);
-    match file.exists() {
-        true => Ok(()),
-        false => Err(format!("cannot access \"{}\": No such file", path))
-    }
-}
 
 
 fn main() -> Result<()> {
@@ -40,7 +28,6 @@ fn main() -> Result<()> {
             .takes_value(true)
             .value_name("CONFIG")
             .default_value(DEFAULT_CONFIG_FILE)
-            .validator(path_validator)
             .help("configuration file")
         ).get_matches();
 
