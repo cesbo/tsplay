@@ -1,12 +1,11 @@
 mod config;
 
 use {
-    std::fs,
-
     anyhow::{
         Result,
         Context,
     },
+    tokio_uring::fs::File,
 
     config::Config,
 };
@@ -15,7 +14,7 @@ use {
 const DEFAULT_CONFIG_FILE: &str = "/etc/tsplay.conf";
 
 
-fn main() -> Result<()> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = clap::App::new(env!("CARGO_PKG_NAME"))
         .version(env!("CARGO_PKG_VERSION"))
         .author(env!("CARGO_PKG_AUTHORS"))
@@ -33,12 +32,21 @@ fn main() -> Result<()> {
 
     // Unwrap use, because there is a default value and a validator for the config argument.
     let path = args.value_of("config").unwrap();
-    let data = fs::read(&path)
-        .with_context(|| format!("Failed to read configuration file \"{}\"", &path))?;
-    let config: Config = serde_json::from_slice(&data)
-        .with_context(|| format!("Failed to parse configuration file \"{}\"", &path))?;
 
-    dbg!(&config);
+    tokio_uring::start(async {
+        let file = File::open(&path).await
+            .with_context(|| format!("Failed to open configuration file \"{}\"", &path))?;
 
-    Ok(())
+        let buf = vec![0; 4096];
+        let (res, buf) = file.read_at(buf, 0).await;
+        let offset = res
+            .with_context(|| format!("Failed to read configuration file \"{}\"", &path))?;
+
+        let config: Config = serde_json::from_slice(&buf[ .. offset])
+            .with_context(|| format!("Failed to parse configuration file \"{}\"", &path))?;
+
+        dbg!(&config);
+
+        Ok(())
+    })
 }
