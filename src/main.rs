@@ -45,6 +45,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let config: Config = serde_json::from_slice(&buf[ .. offset])
             .with_context(|| format!("Failed to parse configuration file \"{}\"", &path))?;
 
+        file.close().await
+            .with_context(|| format!("Failed to close configuration file \"{}\"", &path))?;
+
         dbg!(&config);
 
         Ok(())
