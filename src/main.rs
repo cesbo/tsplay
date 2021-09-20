@@ -1,13 +1,9 @@
 mod config;
 
 use {
-    anyhow::{
-        Result,
-        Context,
-    },
-    tokio_uring::fs::File,
+    anyhow::Result,
 
-    config::Config,
+    config::parse_config,
 };
 
 
@@ -34,20 +30,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let path = args.value_of("config").unwrap();
 
     tokio_uring::start(async {
-        let file = File::open(&path).await
-            .with_context(|| format!("Failed to open configuration file \"{}\"", &path))?;
-
-        let buf = vec![0; 4096];
-        let (res, buf) = file.read_at(buf, 0).await;
-        let offset = res
-            .with_context(|| format!("Failed to read configuration file \"{}\"", &path))?;
-
-        let config: Config = serde_json::from_slice(&buf[ .. offset])
-            .with_context(|| format!("Failed to parse configuration file \"{}\"", &path))?;
-
-        file.close().await
-            .with_context(|| format!("Failed to close configuration file \"{}\"", &path))?;
-
+        let config = parse_config(&path).await?;
         dbg!(&config);
 
         Ok(())
