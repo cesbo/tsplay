@@ -1,9 +1,10 @@
 mod config;
+mod application;
 
 use {
     anyhow::Result,
 
-    config::parse_config,
+    application::Application,
 };
 
 
@@ -30,8 +31,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let path = args.value_of("config").unwrap();
 
     tokio_uring::start(async {
-        let config = parse_config(&path).await?;
-        dbg!(&config);
+        let mut app = Application::new(&path).await?;
+        app.run().await;
 
         Ok(())
     })
