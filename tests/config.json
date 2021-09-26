@@ -1,0 +1,16 @@
+{
+  "stream": [
+    {
+      "name": "Optional name",
+      "input": {
+        "type": "file",
+        "path": "/mnt/sda1/file.ts"
+      },
+      "output": {
+        "type": "udp",
+        "address": "127.0.0.1",
+        "port": 10000
+      }
+    }
+  ]
+}
