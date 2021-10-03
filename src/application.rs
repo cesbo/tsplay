@@ -1,15 +1,19 @@
 use {
     tokio::{
         select,
+        net::UdpSocket,
         signal::unix::{
             signal,
             SignalKind
         },
     },
     anyhow::Result,
+    tokio_uring::fs::File,
 
     super::config::{
+        Type,
         Config,
+        Stream,
         parse_config,
     }
 };
@@ -18,6 +22,38 @@ use {
 async fn signal_coroutine(kind: SignalKind) -> Result<()> {
     let mut stream = signal(kind)?;
     stream.recv().await;
+
+    Ok(())
+}
+
+
+pub async fn play(stream: &Stream) -> Result<()> {
+    match stream {
+        Stream { name: _, input: Type::File { path }, output: Type::Udp { address, port } } => {
+            let mut buf = vec![0; 4096];
+
+            let input = File::open(&path).await.unwrap();
+            let mut input_offset = 0;
+
+            let output = UdpSocket::bind("127.0.0.1:35678").await.unwrap();
+            output.connect(format!("{}:{}", address, port)).await.unwrap();
+
+            loop {
+                let (res, returned_buf) = input.read_at(buf, input_offset).await;
+                buf = returned_buf;
+
+                let offset = res?;
+                input_offset += offset as u64;
+                dbg!(&input_offset);
+
+                output.writable().await.unwrap();
+                if let Err(_) = output.send(&buf[ .. offset]).await {
+                    continue
+                }
+            }
+        },
+        _ => {}
+    }
 
     Ok(())
 }
@@ -55,7 +91,8 @@ impl Application {
                 },
                 _ = signal_coroutine(SignalKind::terminate()) => {
                     break;
-                }
+                },
+                _ = play(&self.config.stream[0]) => {},
             }
         }
     }
