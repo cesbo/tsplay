@@ -11,7 +11,8 @@ use {
 const DEFAULT_CONFIG_FILE: &str = "/etc/tsplay.conf";
 
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = clap::App::new(env!("CARGO_PKG_NAME"))
         .version(env!("CARGO_PKG_VERSION"))
         .author(env!("CARGO_PKG_AUTHORS"))
@@ -30,10 +31,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Unwrap use, because there is a default value and a validator for the config argument.
     let path = args.value_of("config").unwrap();
 
-    tokio_uring::start(async {
-        let mut app = Application::new(&path).await?;
-        app.run().await;
+    let mut app = Application::new(&path).await?;
+    app.run().await;
 
-        Ok(())
-    })
+    Ok(())
 }

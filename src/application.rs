@@ -1,6 +1,10 @@
 use {
+    std::net::Ipv4Addr,
+
     tokio::{
         select,
+        fs::File,
+        io::AsyncReadExt,
         net::UdpSocket,
         signal::unix::{
             signal,
@@ -8,7 +12,6 @@ use {
         },
     },
     anyhow::Result,
-    tokio_uring::fs::File,
 
     super::config::{
         Type,
@@ -32,18 +35,16 @@ pub async fn play(stream: &Stream) -> Result<()> {
         Stream { name: _, input: Type::File { path }, output: Type::Udp { address, port } } => {
             let mut buf = vec![0; 4096];
 
-            let input = File::open(&path).await.unwrap();
+            let mut input = File::open(&path).await.unwrap();
             let mut input_offset = 0;
 
-            let output = UdpSocket::bind("127.0.0.1:35678").await.unwrap();
-            output.connect(format!("{}:{}", address, port)).await.unwrap();
+            let output = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0)).await.unwrap();
+            output.connect((address.as_str(), *port)).await.unwrap();
 
             loop {
-                let (res, returned_buf) = input.read_at(buf, input_offset).await;
-                buf = returned_buf;
+                let offset = input.read(&mut buf).await.unwrap();
 
-                let offset = res?;
-                input_offset += offset as u64;
+                input_offset += offset;
                 dbg!(&input_offset);
 
                 output.writable().await.unwrap();

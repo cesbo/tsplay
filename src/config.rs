@@ -7,7 +7,10 @@ use {
         Result,
         Context,
     },
-    tokio_uring::fs::File,
+    tokio::{
+        fs::File,
+        io::AsyncReadExt,
+    },
 };
 
 
@@ -34,19 +37,15 @@ pub enum Type {
 
 
 pub async fn parse_config(path: &str) -> Result<Config> {
-    let file = File::open(&path).await
+    let mut file = File::open(&path).await
         .with_context(|| format!("Failed to open configuration file \"{}\"", &path))?;
 
-    let buf = vec![0; 4096];
-    let (res, buf) = file.read_at(buf, 0).await;
-    let offset = res
+    let mut buf = vec![];
+    file.read_to_end(&mut buf).await
         .with_context(|| format!("Failed to read configuration file \"{}\"", &path))?;
 
-    let config: Config = serde_json::from_slice(&buf[ .. offset])
+    let config: Config = serde_json::from_slice(&buf)
         .with_context(|| format!("Failed to parse configuration file \"{}\"", &path))?;
-
-    file.close().await
-        .with_context(|| format!("Failed to close configuration file \"{}\"", &path))?;
 
     Ok(config)
 }
