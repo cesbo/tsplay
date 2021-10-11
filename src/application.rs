@@ -1,11 +1,11 @@
 use {
-    std::net::Ipv4Addr,
-
     tokio::{
         select,
         fs::File,
-        io::AsyncReadExt,
-        net::UdpSocket,
+        io::{
+            AsyncReadExt,
+            AsyncWriteExt,
+        },
         signal::unix::{
             signal,
             SignalKind
@@ -13,11 +13,14 @@ use {
     },
     anyhow::Result,
 
-    super::config::{
-        Type,
-        Config,
-        Stream,
-        parse_config,
+    super::{
+        udp::UdpStream,
+        config::{
+            Type,
+            Config,
+            Stream,
+            parse_config,
+        },
     }
 };
 
@@ -38,8 +41,7 @@ pub async fn play(stream: &Stream) -> Result<()> {
             let mut input = File::open(&path).await.unwrap();
             let mut input_offset = 0;
 
-            let output = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0)).await.unwrap();
-            output.connect((address.as_str(), *port)).await.unwrap();
+            let mut output = UdpStream::new((address.as_str(), *port)).await.unwrap();
 
             loop {
                 let offset = input.read(&mut buf).await.unwrap();
@@ -47,8 +49,7 @@ pub async fn play(stream: &Stream) -> Result<()> {
                 input_offset += offset;
                 dbg!(&input_offset);
 
-                output.writable().await.unwrap();
-                if let Err(_) = output.send(&buf[ .. offset]).await {
+                if let Err(_) = output.write(&buf[ .. offset]).await {
                     continue
                 }
             }
