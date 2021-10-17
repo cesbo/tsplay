@@ -34,7 +34,7 @@ use {
 };
 
 
-async fn signal_coroutine(kind: SignalKind) -> Result<()> {
+async fn syssig(kind: SignalKind) -> Result<()> {
     let mut stream = signal(kind)?;
     stream.recv().await;
 
@@ -95,7 +95,7 @@ impl Application {
     pub async fn run(&mut self) {
         loop {
             select! {
-                _ = signal_coroutine(SignalKind::hangup()) => {
+                _ = syssig(SignalKind::hangup()) => {
                     match parse_config(&self.config_path).await {
                         Ok(config) => {
                             dbg!(&config);
@@ -106,7 +106,10 @@ impl Application {
                         }
                     }
                 },
-                _ = signal_coroutine(SignalKind::terminate()) => {
+                _ = syssig(SignalKind::terminate()) => {
+                    break;
+                },
+                _ = syssig(SignalKind::interrupt()) => {
                     break;
                 },
                 _ = play(&self.config.stream[0]) => {},
