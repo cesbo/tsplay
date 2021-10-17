@@ -4,8 +4,8 @@ use {
         pin::Pin,
         net::Ipv4Addr,
         task::{
+            Poll,
             Context,
-            Poll
         },
     },
 
@@ -20,6 +20,8 @@ use {
             ToSocketAddrs,
         },
     },
+
+    super::AsyncStream,
 };
 
 
@@ -65,3 +67,5 @@ impl AsyncWrite for UdpStream {
         Poll::Ready(Ok(()))
     }
 }
+
+impl AsyncStream for UdpStream {}

@@ -1,5 +1,5 @@
-mod udp;
 mod config;
+mod streams;
 mod application;
 
 use {

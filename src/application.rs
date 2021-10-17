@@ -1,11 +1,16 @@
 use {
+    std::{
+        pin::Pin,
+        time::Duration,
+    },
+
     tokio::{
         select,
-        fs::File,
         io::{
             AsyncReadExt,
             AsyncWriteExt,
         },
+        time::sleep,
         signal::unix::{
             signal,
             SignalKind
@@ -14,14 +19,18 @@ use {
     anyhow::Result,
 
     super::{
-        udp::UdpStream,
         config::{
             Type,
             Config,
             Stream,
             parse_config,
         },
-    }
+        streams::{
+            File,
+            UdpStream,
+            AsyncStream,
+        },
+    },
 };
 
 
@@ -33,31 +42,37 @@ async fn signal_coroutine(kind: SignalKind) -> Result<()> {
 }
 
 
-pub async fn play(stream: &Stream) -> Result<()> {
-    match stream {
-        Stream { name: _, input: Type::File { path }, output: Type::Udp { address, port } } => {
-            let mut buf = vec![0; 4096];
-
-            let mut input = File::open(&path).await.unwrap();
-            let mut input_offset = 0;
-
-            let mut output = UdpStream::new((address.as_str(), *port)).await.unwrap();
-
-            loop {
-                let offset = input.read(&mut buf).await.unwrap();
-
-                input_offset += offset;
-                dbg!(&input_offset);
-
-                if let Err(_) = output.write(&buf[ .. offset]).await {
-                    continue
-                }
-            }
+async fn make_stream(stream_type: &Type) -> Result<Pin<Box<dyn AsyncStream>>> {
+    match stream_type {
+        Type::File { path } => {
+            Ok(Box::pin(File::open(&path).await?))
         },
-        _ => {}
+        Type::Udp { address, port } => {
+            Ok(Box::pin(UdpStream::new((address.as_str(), *port)).await?))
+        },
     }
+}
 
-    Ok(())
+
+async fn play(stream: &Stream) -> Result<()> {
+    let mut input = make_stream(&stream.input).await?;
+    let mut output = make_stream(&stream.output).await?;
+
+    let mut buf = vec![0; 4096];
+    let mut input_offset = 0;
+
+    loop {
+        let offset = input.read(&mut buf).await.unwrap();
+
+        input_offset += offset;
+        dbg!(&input_offset);
+
+        if output.write(&buf[ .. offset]).await.is_err() {
+            continue
+        }
+
+        sleep(Duration::from_millis(50)).await;
+    }
 }
 
 
