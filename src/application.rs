@@ -19,6 +19,10 @@ use {
     anyhow::Result,
 
     super::{
+        ts::{
+            TsPacket,
+            TS_PACKET_SIZE,
+        },
         config::{
             Type,
             Config,
@@ -58,11 +62,25 @@ async fn play(stream: &Stream) -> Result<()> {
     let mut input = make_stream(&stream.input).await?;
     let mut output = make_stream(&stream.output).await?;
 
-    let mut buf = vec![0; 4096];
+    let mut buf = vec![0; 24 * TS_PACKET_SIZE];
     let mut input_offset = 0;
 
     loop {
-        let offset = input.read(&mut buf).await.unwrap();
+        let offset = input.read(&mut buf[10 ..]).await.unwrap();
+
+        let mut cnt = 0;
+        while cnt < offset {
+            match TsPacket::new(&buf[cnt .. offset]) {
+                Ok(ts) => {
+                    println!("found ts packet on {} position", cnt);
+                    cnt += TS_PACKET_SIZE;
+                    dbg!(ts.get_cc());
+                    dbg!(ts.get_pid());
+                    dbg!(ts.is_pes());
+                }
+                Err(_) => cnt += 1
+            }
+        }
 
         input_offset += offset;
         dbg!(&input_offset);
