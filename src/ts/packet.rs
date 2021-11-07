@@ -3,6 +3,8 @@ use {
         anyhow,
         Result,
     },
+
+    super::is_sync,
 };
 
 
@@ -16,16 +18,16 @@ pub struct TsPacket<'a> {
 
 impl<'a> TsPacket<'a> {
     pub fn new(ts: &'a [u8]) -> Result<Self> {
+        if ! is_sync(ts) {
+            return Err(
+                anyhow!("ts packet must starts with sync byte {:#x}", TS_SYNC_BYTE)
+            )
+        }
+
         let ts_len = ts.len();
         if ts_len < TS_PACKET_SIZE {
             return Err(
                 anyhow!("ts packet must has {} bytes length, got {}", TS_PACKET_SIZE, ts_len)
-            )
-        }
-
-        if ts[0] != TS_SYNC_BYTE {
-            return Err(
-                anyhow!("ts packet must starts with sync byte {:#x}", TS_SYNC_BYTE)
             )
         }
 
