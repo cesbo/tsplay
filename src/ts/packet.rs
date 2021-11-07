@@ -67,6 +67,15 @@ impl<'a> TsPacket<'a> {
     pub fn get_cc(&self) -> u8 {
         self.ts[3] & 0x0F
     }
+
+    #[inline]
+    pub fn is_pes(&self) -> bool {
+        let payload = self.get_payload();
+
+        payload.get(0) == Some(&0x00)
+            && payload.get(1) == Some(&0x00)
+            && payload.get(2) == Some(&0x01)
+    }
 }
 
 
