@@ -71,10 +71,7 @@ impl<'a> TsPacket<'a> {
     #[inline]
     pub fn is_pes(&self) -> bool {
         let payload = self.get_payload();
-
-        payload.get(0) == Some(&0x00)
-            && payload.get(1) == Some(&0x00)
-            && payload.get(2) == Some(&0x01)
+        payload.get(0 .. 3) == Some(&[0x00, 0x00, 0x01])
     }
 }
 
