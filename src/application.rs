@@ -23,6 +23,8 @@ use {
             TsPacket,
             TS_PACKET_SIZE,
         },
+        es::PesPacket,
+        misc::offset_calc,
         config::{
             Type,
             Config,
@@ -62,31 +64,54 @@ async fn play(stream: &Stream) -> Result<()> {
     let mut input = make_stream(&stream.input).await?;
     let mut output = make_stream(&stream.output).await?;
 
-    let mut buf = vec![0; 24 * TS_PACKET_SIZE];
-    let mut input_offset = 0;
+    let mut buf = [0; 1024 * TS_PACKET_SIZE];
+    let mut ts_cnt = 0;
 
     loop {
-        let offset = input.read(&mut buf[10 ..]).await.unwrap();
+        let mut r_offset = 0;
+        loop {
+            let offset = input.read(&mut buf[r_offset.. ]).await.unwrap();
+            r_offset += offset;
+            if offset == 0 {
+                break
+            }
+        }
+
+        let mut pts_vec = Vec::new();
 
         let mut cnt = 0;
-        while cnt < offset {
-            match TsPacket::new(&buf[cnt .. offset]) {
+        while cnt < r_offset {
+            match TsPacket::new(&buf[cnt ..r_offset]) {
                 Ok(ts) => {
-                    println!("found ts packet on {} position", cnt);
+                    ts_cnt += 1;
                     cnt += TS_PACKET_SIZE;
-                    dbg!(ts.get_cc());
-                    dbg!(ts.get_pid());
-                    dbg!(ts.is_pes());
+                    if ! (ts.is_pusi() & ts.is_payload()) {
+                        continue
+                    }
+
+                    if ts.is_pes() {
+                        let pes = PesPacket::from(ts);
+                        if pes.is_syntax_spec() && pes.is_pts() {
+                            if let Some(pts) = pes.get_pts() {
+                                pts_vec.push(pts);
+                            };
+                        }
+                    }
                 }
                 Err(_) => cnt += 1
             }
         }
 
-        input_offset += offset;
-        dbg!(&input_offset);
+        dbg!(&pts_vec);
 
-        if output.write(&buf[ .. offset]).await.is_err() {
-            continue
+        let mut w_offset = 0;
+        loop {
+            let (start, end) = offset_calc(w_offset, r_offset);
+            let offset = output.write(&mut buf[start .. end]).await.unwrap();
+            w_offset += offset;
+            if offset == 0 {
+                break
+            }
         }
 
         sleep(Duration::from_millis(50)).await;
