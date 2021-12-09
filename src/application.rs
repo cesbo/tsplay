@@ -40,6 +40,27 @@ use {
 };
 
 
+/// 90clocks = 1ms
+pub const PTS_CLOCK_MS: u64 = 90;
+pub const PTS_NONE: u64 = 1 << 33;
+pub const PTS_MAX: u64 = PTS_NONE - 1;
+
+/// Converts PTS to milliseconds
+#[inline]
+pub fn pts_to_ms(pts: u64) -> u64 { pts / PTS_CLOCK_MS }
+
+
+/// Returns difference between previous PTS and current PTS
+#[inline]
+pub fn pts_delta(last_pts: u64, current_pts: u64) -> u64 {
+    if current_pts >= last_pts {
+        current_pts - last_pts
+    } else {
+        current_pts + PTS_MAX - last_pts
+    }
+}
+
+
 async fn syssig(kind: SignalKind) -> Result<()> {
     let mut stream = signal(kind)?;
     stream.recv().await;
@@ -65,10 +86,16 @@ async fn play(stream: &Stream) -> Result<()> {
     let mut output = make_stream(&stream.output).await?;
 
     let mut buf = [0; 1024 * TS_PACKET_SIZE];
-    let mut ts_cnt = 0;
 
     loop {
+        let mut pts_first = 0;
+        let mut pts_last = 0;
+
         let mut r_offset = 0;
+        let mut w_offset = 0;
+
+        let mut pts_vec = Vec::new();
+
         loop {
             let offset = input.read(&mut buf[r_offset.. ]).await.unwrap();
             r_offset += offset;
@@ -77,44 +104,56 @@ async fn play(stream: &Stream) -> Result<()> {
             }
         }
 
-        let mut pts_vec = Vec::new();
-
         let mut cnt = 0;
         while cnt < r_offset {
             match TsPacket::new(&buf[cnt ..r_offset]) {
                 Ok(ts) => {
-                    ts_cnt += 1;
                     cnt += TS_PACKET_SIZE;
-                    if ! (ts.is_pusi() & ts.is_payload()) {
+                    if ! (ts.is_pusi() && ts.is_payload()) {
                         continue
                     }
 
-                    if ts.is_pes() {
-                        let pes = PesPacket::from(ts);
-                        if pes.is_syntax_spec() && pes.is_pts() {
-                            if let Some(pts) = pes.get_pts() {
-                                pts_vec.push(pts);
-                            };
-                        }
+                    if ! ts.is_pes() {
+                        continue
                     }
+
+                    let pes = PesPacket::from(ts);
+                    if ! (pes.is_syntax_spec() && pes.is_pts()) {
+                        continue
+                    }
+
+                    if let Some(pts) = pes.get_pts() {
+                        pts_vec.push(pts);
+
+                        if pts_first == 0 {
+                            pts_first = pts;
+                            pts_last = pts;
+                        }
+
+                        if pts > pts_last {
+                            let delta = pts_to_ms(
+                                pts_delta(pts_first, pts)
+                            );
+
+                            pts_first = pts;
+                            pts_last = pts;
+
+                            loop {
+                                let (start, end) = offset_calc(w_offset, cnt);
+                                let offset = output.write(&mut buf[start .. end]).await.unwrap();
+                                w_offset += offset;
+                                if offset == 0 {
+                                    break
+                                }
+                            }
+
+                            sleep(Duration::from_millis(50)).await;
+                        }
+                    };
                 }
                 Err(_) => cnt += 1
             }
         }
-
-        dbg!(&pts_vec);
-
-        let mut w_offset = 0;
-        loop {
-            let (start, end) = offset_calc(w_offset, r_offset);
-            let offset = output.write(&mut buf[start .. end]).await.unwrap();
-            w_offset += offset;
-            if offset == 0 {
-                break
-            }
-        }
-
-        sleep(Duration::from_millis(50)).await;
     }
 }
 
