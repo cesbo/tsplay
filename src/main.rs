@@ -1,5 +1,6 @@
 mod ts;
 mod es;
+mod mpeg;
 mod misc;
 mod config;
 mod streams;
