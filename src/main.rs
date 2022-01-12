@@ -2,6 +2,7 @@ mod ts;
 mod es;
 mod mpeg;
 mod misc;
+mod bytes;
 mod config;
 mod streams;
 mod application;
