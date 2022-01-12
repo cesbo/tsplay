@@ -4,7 +4,10 @@ use {
         Result,
     },
 
-    crate::ts::TsPacket,
+    crate::{
+        ts::TsPacket,
+        bytes::*,
+    },
 };
 
 
@@ -55,20 +58,20 @@ impl Pat {
         // TODO: pointer_field?
         match payload.get(2 .. 4).map(
             |value|
-            (((value[0] & 0x0F) as usize) << 8) | value[1] as usize
+            usize::from(value.get_u16() & 0x0FFF)
         ) {
             Some(length) => {
                 if payload[4 .. ].len() < length {
                     return Err(anyhow!("PAT: part of section is out of ts packet"))
                 }
 
-                let transport_stream_id = (payload[4] as u16) << 8 | payload[5] as u16;
+                let transport_stream_id = payload[4 .. ].get_u16();
                 let version_number = (payload[6] & 0x3E) >> 1;
                 let items = payload[9 .. length].chunks_exact(4).map(
                     |data|
                     PatItem {
-                        program_number: (data[0] as u16) << 8 | data[1] as u16,
-                        program_map_pid: (((data[2] & 0x1F) as u16) << 8) | data[3] as u16
+                        program_number: data.get_u16(),
+                        program_map_pid: data[2 .. ].get_u16() & 0x1FFF,
                     }
                 ).collect();
 
@@ -78,7 +81,7 @@ impl Pat {
                     items,
                 })
             },
-            None => return Err(anyhow!("PAT: section doesn't contain section_length bytes"))
+            None => Err(anyhow!("PAT: section doesn't contain section_length bytes"))
         }
     }
 }
