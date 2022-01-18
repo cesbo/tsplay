@@ -51,6 +51,8 @@ pub struct Pmt {
     /// TS_program_map_section. When the current_next_indicator is set to '0', then the version_number shall be
     /// that of the next applicable TS_program_map_section.
     pub version_number: u8,
+    /// List of PmtItem.
+    pub items: Vec<PmtItem>,
 }
 
 impl Pmt {
@@ -69,11 +71,28 @@ impl Pmt {
 
                 let program_number = payload[4 .. ].get_u16();
                 let version_number = (payload[6] & 0x3E) >> 1;
-                let program_info_length = (payload[11 ..].get_u16() & 0x0FFF) as usize;
+                let program_info_length = (payload[11 .. ].get_u16() & 0x0FFF) as usize;
+
+                let mut items = Vec::new();
+                // Skip descriptor section;
+                let mut ptr = 13 + program_info_length;
+                // PMT items section parsing.
+                while ptr < length - 9 {
+                    items.push(
+                        PmtItem {
+                            stream_type: payload[ptr],
+                            elementary_pid: payload[ptr + 1 .. ].get_u16() & 0x1FFF
+                        }
+                    );
+
+                    let es_info_length = (payload[ptr + 3 .. ].get_u16() & 0x0FFF) as usize;
+                    ptr += 5 + es_info_length;
+                }
 
                 Ok(Self {
                     program_number,
                     version_number,
+                    items,
                 })
             },
             None => Err(anyhow!("PMT: section doesn't contain section_length bytes"))
