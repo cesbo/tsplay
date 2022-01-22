@@ -4,6 +4,7 @@ use {
         Result,
     },
 
+    super::StreamType,
     crate::{
         ts::TsPacket,
         bytes::*,
@@ -27,6 +28,16 @@ pub struct PmtItem {
     /// This is a 13-bit field specifying the PID of the Transport Stream packets which carry the associated
     /// program element.
     pub elementary_pid: u16,
+}
+
+impl PmtItem {
+    pub fn get_stream_type(&self) -> StreamType {
+        match self.stream_type {
+            0x01 | 0x02 | 0x10 | 0x1B | 0x24 => StreamType::Video,
+            0x03 | 0x04 | 0x0F | 0x11 => StreamType::Audio,
+            _ => StreamType::Data,
+        }
+    }
 }
 
 
