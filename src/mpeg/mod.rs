@@ -8,7 +8,7 @@ pub use pmt::Pmt;
 
 
 /// MPEG-TS Elementary Stream Types
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum StreamType {
     /// Video stream:
     ///
