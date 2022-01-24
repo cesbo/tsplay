@@ -24,6 +24,12 @@ use {
             TS_PACKET_SIZE,
         },
         es::PesPacket,
+        mpeg::{
+            pid,
+            Pat,
+            Pmt,
+            StreamType,
+        },
         misc::offset_calc,
         config::{
             Type,
@@ -85,12 +91,15 @@ async fn play(stream: &Stream) -> Result<()> {
     let mut input = make_stream(&stream.input).await?;
     let mut output = make_stream(&stream.output).await?;
 
-    let mut buf = [0; 1024 * TS_PACKET_SIZE];
+    let mut buf = [0; 2048 * TS_PACKET_SIZE];
+
+    let mut pmt_pids = Vec::new();
+    let mut multimedia_pid = pid::NONE;
+
+    let mut pts_first = 0;
+    let mut pts_last = 0;
 
     loop {
-        let mut pts_first = 0;
-        let mut pts_last = 0;
-
         let mut r_offset = 0;
         let mut w_offset = 0;
 
@@ -106,14 +115,32 @@ async fn play(stream: &Stream) -> Result<()> {
 
         let mut cnt = 0;
         while cnt < r_offset {
-            match TsPacket::new(&buf[cnt ..r_offset]) {
+            match TsPacket::new(&buf[cnt .. r_offset]) {
                 Ok(ts) => {
                     cnt += TS_PACKET_SIZE;
-                    if ! (ts.is_pusi() && ts.is_payload()) {
-                        continue
+                    let ts_pid = ts.get_pid();
+
+                    if multimedia_pid == pid::NONE {
+                        if ts_pid == pid::PAT && pmt_pids.is_empty() {
+                            let pat = Pat::new(&ts).unwrap();
+                            pmt_pids.extend(
+                                pat.items.iter().map(|item| item.program_map_pid)
+                            );
+                        }
+
+                        if pmt_pids.contains(&ts_pid) {
+                            let pmt = Pmt::new(&ts).unwrap();
+                            for item in pmt.items {
+                                if item.get_stream_type() == StreamType::Video {
+                                    multimedia_pid = item.elementary_pid;
+                                    pmt_pids.clear();
+                                    break
+                                }
+                            }
+                        }
                     }
 
-                    if ! ts.is_pes() {
+                    if ts_pid != multimedia_pid || ! (ts.is_pusi() && ts.is_payload()) || ! ts.is_pes() {
                         continue
                     }
 
@@ -131,11 +158,13 @@ async fn play(stream: &Stream) -> Result<()> {
                         }
 
                         if pts > pts_last {
-                            let delta = pts_to_ms(
-                                pts_delta(pts_first, pts)
-                            );
+                            pts_last = pts;
+                            continue
+                        }
 
-                            pts_first = pts;
+                        if pts < pts_last {
+                            let delta = pts_to_ms(pts_delta(pts_first, pts_last));
+                            pts_first = pts_last;
                             pts_last = pts;
 
                             loop {
