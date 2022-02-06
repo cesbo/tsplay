@@ -102,22 +102,23 @@ async fn play(stream: &Stream) -> Result<()> {
     loop {
         let mut r_offset = 0;
         let mut w_offset = 0;
+        let mut c_offset = 0;
 
         let mut pts_vec = Vec::new();
 
         loop {
-            let offset = input.read(&mut buf[r_offset.. ]).await.unwrap();
+            let offset = input.read(&mut buf[r_offset .. ]).await.unwrap();
             r_offset += offset;
             if offset == 0 {
                 break
             }
         }
 
-        let mut cnt = 0;
-        while cnt < r_offset {
-            match TsPacket::new(&buf[cnt .. r_offset]) {
+
+        while c_offset < r_offset {
+            match TsPacket::new(&buf[c_offset.. r_offset]) {
                 Ok(ts) => {
-                    cnt += TS_PACKET_SIZE;
+                    c_offset += TS_PACKET_SIZE;
                     let ts_pid = ts.get_pid();
 
                     if multimedia_pid == pid::NONE {
@@ -163,12 +164,16 @@ async fn play(stream: &Stream) -> Result<()> {
                         }
 
                         if pts < pts_last {
-                            let delta = pts_to_ms(pts_delta(pts_first, pts_last));
+                            let delta = pts_to_ms(pts_delta(pts_first, pts));
                             pts_first = pts_last;
                             pts_last = pts;
 
                             loop {
-                                let (start, end) = offset_calc(w_offset, cnt);
+                                let (start, end) = offset_calc(w_offset, c_offset);
+                                let diff = end - start;
+                                if diff < 7 * TS_PACKET_SIZE {
+                                    break
+                                }
                                 let offset = output.write(&mut buf[start .. end]).await.unwrap();
                                 w_offset += offset;
                                 if offset == 0 {
@@ -176,11 +181,11 @@ async fn play(stream: &Stream) -> Result<()> {
                                 }
                             }
 
-                            sleep(Duration::from_millis(50)).await;
+                            sleep(Duration::from_millis(10)).await;
                         }
                     };
                 }
-                Err(_) => cnt += 1
+                Err(_) => c_offset += 1
             }
         }
     }

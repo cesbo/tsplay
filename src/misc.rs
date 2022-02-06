@@ -1,4 +1,7 @@
-const MAX_BUF: usize = 16 * 1024;
+use super::ts::TS_PACKET_SIZE;
+
+
+const MAX_BUF: usize = 7 * TS_PACKET_SIZE;
 
 
 pub fn offset_calc(start: usize, total: usize) -> (usize, usize) {
